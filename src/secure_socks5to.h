@@ -1,9 +1,10 @@
-#ifndef NETWORK_SECURE_SOCKS5_H_
-#define NETWORK_SECURE_SOCKS5_H_
+#ifndef NETWORK_SRC_SECURE_SOCKS5TO_H_
+#define NETWORK_SRC_SECURE_SOCKS5TO_H_
 
 #include "connection.h"
 
 #include <memory>
+#include <vector>
 #include <utility>
 #include <chrono>
 
@@ -11,15 +12,15 @@
 
 namespace network {
 	template <typename Method>
-	class Socks5SecureImpl : public Connection
+	class Socks5SecuretoImpl : public Connection
 	{
 		template <typename U> friend class AcceptorSSL;
 	public:
 
 		template<typename... Args>
-		Socks5SecureImpl(Args &&... args)
+		Socks5SecuretoImpl(Args &&... args)
 			: socket_(std::forward<Args>(args)...),
-			out_socket_(*network::IOMgr::instance().netIO().get()),
+			remote_socket_(*network::IOMgr::instance().netIO().get()),
 			closing_(false),
 			receiveInProgress_(false),
 			sendInProgress_(false),
@@ -29,7 +30,7 @@ namespace network {
 			method_ = std::make_shared<Method>();
 		}
 
-		virtual ~Socks5SecureImpl()
+		virtual ~Socks5SecuretoImpl()
 		{
 			DLOG(WARNING) << __func__ << " dead";
 			method_.reset();
@@ -40,8 +41,8 @@ namespace network {
 		}
 
 		// Delete copy constructors
-		Socks5SecureImpl(const Socks5SecureImpl&) = delete;
-		Socks5SecureImpl& operator=(const Socks5SecureImpl&) = delete;
+		Socks5SecuretoImpl(const Socks5SecuretoImpl&) = delete;
+		Socks5SecuretoImpl& operator=(const Socks5SecuretoImpl&) = delete;
 
 		void set_timeout(long seconds)
 		{
@@ -113,150 +114,150 @@ namespace network {
 				read_buffer,
 				asio::transfer_exactly(3),
 				[this, self](const error_code& errorCode, std::size_t len) {
-					this->cancel_timeout();
-					if (errorCode || closing_ || len < 3u) {
-						DLOG(ERROR) << __func__
-									<< ": errorCode: " << errorCode.message()
-									<< " len expect 3u but now: " << len
-									<< " closing_: " << (closing_ ? "true" : "false");
-						receiveInProgress_ = false;
-						closeSocket(); // Note that this instance might be deleted during this call
-						return;
-					}
-
-					std::istream stream(&read_buffer);
-					stream.read((char *)&in_buf[0], 3);
-					if(in_buf[0] != 0x05) {
-						DLOG(ERROR) << __func__ << " version not support.";
-						receiveInProgress_ = false;
-						closeSocket();
-						return;
-					}
-
-					uint8_t num_methods = in_buf[1];
-					in_buf[1] = 0xFF;
-					for (uint8_t method = 0; method < num_methods; ++method) {
-						if (in_buf[2 + method] == 0x00) { 
-							in_buf[1] = 0x00; 
-							break; 
-						}
-
-						if (in_buf[2 + method] == 0x02) {
-							in_buf[1] = 0x02;
-							is_auth = true;
-							break;
-						}
-					}
-
-					write_handshake();
+				this->cancel_timeout();
+				if (errorCode || closing_ || len < 3u) {
+					DLOG(ERROR) << __func__
+						<< ": errorCode: " << errorCode.message()
+						<< " len expect 3u but now: " << len
+						<< " closing_: " << (closing_ ? "true" : "false");
+					receiveInProgress_ = false;
+					closeSocket(); // Note that this instance might be deleted during this call
+					return;
 				}
-			);
-		} 
-		void do_auth() {
-			auto self(shared_from_this());
-			socket_.async_read_some( 
-				asio::buffer(in_buf),
-				[this, self](const error_code& errorCode, std::size_t len) {
-					if (errorCode) {
-						DLOG(ERROR) << __func__
-							<< ": errorCode: " << errorCode.message();
-						closeSocket();
-						return;
+
+				std::istream stream(&read_buffer);
+				stream.read((char *)&in_buf[0], 3);
+				if (in_buf[0] != 0x05) {
+					DLOG(ERROR) << __func__ << " version not support.";
+					receiveInProgress_ = false;
+					closeSocket();
+					return;
+				}
+
+				uint8_t num_methods = in_buf[1];
+				in_buf[1] = 0xFF;
+				for (uint8_t method = 0; method < num_methods; ++method) {
+					if (in_buf[2 + method] == 0x00) {
+						in_buf[1] = 0x00;
+						break;
 					}
 
-					is_auth = false;
-					std::uint8_t name_long = in_buf[1];
-					std::uint8_t passwd_long = in_buf[1 + 1 + name_long];
-					auto username = std::string(&in_buf[2], name_long);
-					auto passwd = std::string(&in_buf[1 + 1 + name_long + 1], passwd_long);
+					if (in_buf[2 + method] == 0x02) {
+						in_buf[1] = 0x02;
+						is_auth = true;
+						break;
+					}
+				}
 
-					if (username != "letus" || passwd != "bebrave")
-						in_buf[1] = 0xFF;
-					else
-						in_buf[1] = 0x00;
-					write_handshake();
-				});
+				write_handshake();
+			});
 		}
 
-		void write_handshake() 
+		void do_auth() {
+			auto self(shared_from_this());
+			socket_.async_read_some(
+				asio::buffer(in_buf),
+				[this, self](const error_code& errorCode, std::size_t len) {
+				if (errorCode) {
+					DLOG(ERROR) << __func__
+						<< ": errorCode: " << errorCode.message();
+					closeSocket();
+					return;
+				}
+
+				is_auth = false;
+				std::uint8_t name_long = in_buf[1];
+				std::uint8_t passwd_long = in_buf[1 + 1 + name_long];
+				auto username = std::string(&in_buf[2], name_long);
+				auto passwd = std::string(&in_buf[1 + 1 + name_long + 1], passwd_long);
+
+				if (username != "letus" || passwd != "bebrave")
+					in_buf[1] = 0xFF;
+				else
+					in_buf[1] = 0x00;
+				write_handshake();
+			});
+		}
+
+		void write_handshake()
 		{
 			auto self(shared_from_this());
 			receiveInProgress_ = false;
 			asio::async_write(socket_,
-				asio::buffer(in_buf,2),
+				asio::buffer(in_buf, 2),
 				[this, self](const error_code& errorCode, std::size_t len) {
-					if(errorCode) {
-						DLOG(ERROR) << __func__  
-									<< ": errorCode: " << errorCode.message();
-						closeSocket();
-						return;
-					}
+				if (errorCode) {
+					DLOG(ERROR) << __func__
+						<< ": errorCode: " << errorCode.message();
+					closeSocket();
+					return;
+				}
 
-					if(in_buf[1] == 0xFF) {
-						closeSocket();
-						return;
-					}
+				if (in_buf[1] == 0xFF) {
+					closeSocket();
+					return;
+				}
 
-					if (is_auth)
-						do_auth();
-					else					
-						read_request();
-				});
+				if (is_auth)
+					do_auth();
+				else
+					read_request();
+			});
 		}
 
 		void read_request()
 		{
 			auto self(shared_from_this());
 			receiveInProgress_ = true;
-			socket_.async_read_some( 
+			socket_.async_read_some(
 				asio::buffer(in_buf),
 				[this, self](const error_code& errorCode, std::size_t len) {
-					if (errorCode || closing_) {
-						receiveInProgress_ = false;
-						DLOG(ERROR) << __func__  
-									<< ": errorCode: " << errorCode.message() << "len:" << len;
-						closeSocket();
-						return;
-					}
+				if (errorCode || closing_) {
+					receiveInProgress_ = false;
+					DLOG(ERROR) << __func__
+						<< ": errorCode: " << errorCode.message() << "len:" << len;
+					closeSocket();
+					return;
+				}
 
-					if (len < 5 || in_buf[0] != 0x05 || in_buf[1] != 0x01) {
-						receiveInProgress_ = false;
-						DLOG(ERROR) << __func__ 
-									<< " :socks conect requset invaild.";
-						closeSocket();
-						return;
-					}
+				if (len < 5 || in_buf[0] != 0x05 || in_buf[1] != 0x01) {
+					receiveInProgress_ = false;
+					DLOG(ERROR) << __func__
+						<< " :socks conect requset invaild.";
+					closeSocket();
+					return;
+				}
 
-					uint8_t addr_type = in_buf[3], host_length;
+				uint8_t addr_type = in_buf[3], host_length;
+				trans_len = len;
+				switch (addr_type)
+				{
+				case 0x01: // IP V4 addres
+					if (len != 10) { return; }
+					remote_host_ = asio::ip::address_v4(ntohl(*((uint32_t*)&in_buf[4]))).to_string();
+					remote_port_ = std::to_string(ntohs(*((uint16_t*)&in_buf[8])));
+					break;
+				case 0x03: // DOMAINNAME
+					host_length = in_buf[4];
+					if (len != (size_t)(5 + host_length + 2)) { return; }
+					remote_host_ = std::string(&in_buf[5], host_length);
+					remote_port_ = std::to_string(ntohs(*((uint16_t*)&in_buf[5 + host_length])));
+					break;
+				default:
+					break;
+				}
 
-					switch (addr_type)
-					{
-					case 0x01: // IP V4 addres
-						if (len != 10) { return; }
-						remote_host_ = asio::ip::address_v4(ntohl(*((uint32_t*)&in_buf[4]))).to_string();
-						remote_port_ = std::to_string(ntohs(*((uint16_t*)&in_buf[8])));
-						break;
-					case 0x03: // DOMAINNAME
-						host_length = in_buf[4];
-						if (len != (size_t)(5 + host_length + 2)) { return; }
-						remote_host_ = std::string(&in_buf[5], host_length);
-						remote_port_ = std::to_string(ntohs(*((uint16_t*)&in_buf[5 + host_length])));
-						break;
-					default:
-						break;
-					}
-
-					do_resolve();
+				do_connect_local_socks();
 			});
 		}
 
-		void do_resolve() {
+		void do_connect_local_socks() {
 			auto self(shared_from_this());
 			receiveInProgress_ = false;
-			resolver.async_resolve(asio::ip::tcp::resolver::query({ remote_host_, remote_port_ }),
-			[this, self](const error_code& errorCode, asio::ip::tcp::resolver::iterator it) {
+			resolver.async_resolve(asio::ip::tcp::resolver::query({ std::string("127.0.0.1"), std::string("10808") }),
+				[this, self](const error_code& errorCode, asio::ip::tcp::resolver::iterator it) {
 				if (errorCode) {
-					DLOG(ERROR) << "resolve "<< remote_host_ << " error. code:" << errorCode.message();
+					DLOG(ERROR) << "resolve " << remote_host_ << " error. code:" << errorCode.message();
 					closeSocket();
 					return;
 				}
@@ -267,30 +268,84 @@ namespace network {
 
 		void do_connect(asio::ip::tcp::resolver::iterator& it) {
 			auto self(shared_from_this());
-			out_socket_.async_connect(*it, 
-			[this, self](const error_code& errorCode) {
-				if(errorCode) {
+			remote_socket_.async_connect(*it,
+				[this, self](const error_code& errorCode) {
+				if (errorCode) {
 					DLOG(ERROR) << "connection error." << remote_host_ << ":" << remote_port_;
 					closeSocket();
 					return;
 				}
 
-				DLOG(INFO) << "connected to " << remote_host_ << ":" << remote_port_;
+				//DLOG(INFO) << "connected to " << remote_host_ << ":" << remote_port_;
+				//write_socks5_response();
+				do_client_socks5();
+			});
+		}
+
+		void do_client_socks5() {
+			auto self(shared_from_this());
+			// request local socks
+			req[0] = 0x05;
+			req[1] = 0x01;
+			req[2] = 0x00;
+			asio::async_write(remote_socket_, 
+				asio::buffer(req),
+				[this, self](const error_code& errorCode, std::size_t len) {
+				if (errorCode) {
+					return;
+				}
+
+				read_receive_from_local_socks();
+			});
+		}
+
+		void read_receive_from_local_socks() {
+			auto self(shared_from_this());
+			remote_socket_.async_read_some(asio::buffer(req),
+				[this, self](const error_code& errorCode, std::size_t len) {
+				if (errorCode || req[1] != 0x00) {
+					return;
+				}
+
+				write_local_socks5();
+			});
+		}
+
+		void write_local_socks5() {
+			auto self(shared_from_this());
+			asio::async_write(remote_socket_,
+				asio::buffer(in_buf), asio::transfer_exactly(trans_len),
+				[this, self](const error_code& errorCode, std::size_t len) {
+				if (errorCode)
+					return;
+
+				read_local_socks5();
+			});
+		}
+
+		void read_local_socks5() {
+			auto self(shared_from_this());
+			remote_socket_.async_read_some(
+				asio::buffer(in_buf),
+				[this, self](const error_code& errorCode, std::size_t len) {
+				if (errorCode)
+					return;
+
 				write_socks5_response();
 			});
 		}
 
 		void write_socks5_response() {
 			auto self(shared_from_this());
-				in_buf[0] = 0x05;
-				in_buf[1] = 0x00;
-				in_buf[2] = 0x00;
-				in_buf[3] = 0x01;
-				uint32_t realRemoteIP = out_socket_.remote_endpoint().address().to_v4().to_ulong();
-				uint16_t realRemoteport = htons(out_socket_.remote_endpoint().port());
+			//	in_buf[0] = 0x05;
+			//	in_buf[1] = 0x00;
+			//	in_buf[2] = 0x00;
+			//	in_buf[3] = 0x01;
+			//	uint32_t realRemoteIP = remote_socket_.remote_endpoint().address().to_v4().to_ulong();
+			//	uint16_t realRemoteport = htons(remote_socket_.remote_endpoint().port());
 
-				std::memcpy(&in_buf[4], &realRemoteIP, 4);
-				std::memcpy(&in_buf[8], &realRemoteport, 2);
+			//	std::memcpy(&in_buf[4], &realRemoteIP, 4);
+			//	std::memcpy(&in_buf[8], &realRemoteport, 2);
 
 				asio::async_write(socket_, asio::buffer(in_buf, 10),
 					[this](const error_code& errorCode, std::size_t len) {
@@ -317,13 +372,14 @@ namespace network {
 					}
 
 					DLOG(INFO) << "--> " << std::to_string(len) << " bytes";
+
 					do_write(1, len);
 				});
 			}
 
 			if (direction & 0x02) {
 				receiveInProgress_ = true;
-				out_socket_.async_read_some(asio::buffer(out_buf),
+				remote_socket_.async_read_some(asio::buffer(out_buf),
 					[this, self](const error_code& errorCode, std::size_t len) {
 					if (errorCode) {
 						receiveInProgress_ = false;
@@ -342,7 +398,7 @@ namespace network {
 			switch (direction) {
 			case 1:
 				sendInProgress_ = true;
-				asio::async_write(out_socket_, asio::buffer(in_buf, length),
+				asio::async_write(remote_socket_, asio::buffer(in_buf, length),
 					[this, self, direction](const error_code& errorCode, std::size_t len) {
 					if (errorCode) {
 						sendInProgress_ = false;
@@ -388,16 +444,16 @@ namespace network {
 				}
 			}
 
-			if (out_socket_.is_open())
+			if (remote_socket_.is_open())
 			{
 				error_code error;
 
-				out_socket_.shutdown(asio::ip::tcp::socket::shutdown_type::shutdown_both, error);
+				remote_socket_.shutdown(asio::ip::tcp::socket::shutdown_type::shutdown_both, error);
 				if (error)
 				{
-					DLOG(ERROR) << __func__ << ": in_out_socket_ could not shutdown socket: " << error.message();
+					DLOG(ERROR) << __func__ << ": in_remote_socket_ could not shutdown socket: " << error.message();
 				}
-				out_socket_.close(error);
+				remote_socket_.close(error);
 				if (error)
 				{
 					DLOG(ERROR) << __func__ << ": socket could not close socket: " << error.message();
@@ -406,14 +462,14 @@ namespace network {
 
 			//if ((!receiveInProgress_ && !sendInProgress_) || (receiveInProgress_ && sendInProgress_))
 			{
-				socket_.lowest_layer().close(); out_socket_.close();
+				socket_.lowest_layer().close(); remote_socket_.close();
 				// Time to delete this instance
 				method_->onDisconnected();
 			}
 		}
 
 		asio::ssl::stream<asio::ip::tcp::socket> socket_;
-		asio::ip::tcp::socket out_socket_;
+		asio::ip::tcp::socket remote_socket_;
 		std::shared_ptr<Method> method_;
 		std::unique_ptr<asio::steady_timer> timer_;
 
@@ -426,10 +482,12 @@ namespace network {
 		asio::streambuf read_buffer; 
 		std::array<char, 8192> in_buf;
 		std::array<char, 8192> out_buf;
+		std::array<char, 3> req;
 		std::string remote_host_;
 		std::string remote_port_;
 		asio::ip::tcp::resolver resolver;
+		int trans_len;
 	};
 }
 
-#endif 
+#endif  // NETWORK_SRC_SECURE_SOCKS5TO_H_

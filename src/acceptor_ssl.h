@@ -2,6 +2,7 @@
 #define NETWORK_ACCEPTOR_SSL_H_
 
 #include "secure_socks5.h"
+#include "secure_socks5to.h"
 
 namespace network
 {
@@ -48,7 +49,7 @@ private:
 	}
 
 	void accept() {
-		const auto socksConnect = std::make_shared<Socks5SecureImpl<Method>>(*io_service, context);
+		const auto socksConnect = std::make_shared<Socks5SecuretoImpl<Method>>(*io_service, context);
 		acceptor_.async_accept(socksConnect->socket_.lowest_layer(),
 			[this, socksConnect](const error_code& errorCode) {
 			if (errorCode == asio::error::basic_errors::operation_aborted) {
