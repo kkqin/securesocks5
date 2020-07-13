@@ -16,3 +16,4 @@ Using the following services or open-source libraries.
 Inspired by 
 - [Simple-WebSocket-Server](https://github.com/eidheim/Simple-WebSocket-Server)
 - [gameserver](https://github.com/gurka/gameserver)
+- [boost_socks5](https://github.com/philave/boost_socks5)
