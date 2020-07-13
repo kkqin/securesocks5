@@ -3,7 +3,7 @@
 It's a server.
 <br>
 ## Support
-support tls1.3
+support tls1.3  
 socks5tls -> proxy  
 socks5tls -> socks5 -> proxy
 <br>
