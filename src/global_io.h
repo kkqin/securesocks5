@@ -16,10 +16,10 @@ namespace network
 	{
 	public:
 		static IOMgr& instance();
-		std::shared_ptr<asio::io_service>& netIO();
+		std::shared_ptr<asio::io_context>& netIO();
 	private:
 		IOMgr();
-		std::shared_ptr<asio::io_service> _io;
+		std::shared_ptr<asio::io_context> _io;
 	};
 
 }
