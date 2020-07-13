@@ -1,6 +1,7 @@
 # securesocks5
 一个socks5tls服务器  
 It's a server.
+super ligthweight.
 <br>
 ## Support
 support tls1.3  
