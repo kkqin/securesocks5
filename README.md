@@ -13,6 +13,7 @@ Using the following services or open-source libraries.
 
 - [glog](https://github.com/google/glog)
 - Boost.Asio or standalone Asio
+- OpenSSL libraries
 
 ## Acknowlegements
 Inspired by 
