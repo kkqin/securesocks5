@@ -1,5 +1,5 @@
 # securesocks5
-一个socks5tls服务器  
+一个socks5tls服务器 提供转发
 It's a server.  
 super light-weight.
 <br>
